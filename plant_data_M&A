@@ -1,0 +1,714 @@
+
+
+getwd()
+setwd("C:/Users/Harrison/Desktop/datamodel")
+
+ library("dplyr")
+library("ggplot2")
+library("fpc")
+library("cowplot")
+library("combinat")
+library("cluster")
+library("e1071")
+
+da = read.csv(file="cw_dataset.csv", header=TRUE, sep=",")#read the dataset
+
+nrow(da)#check the data
+names(da) 
+
+#rename
+names(da) =c("Sample_ID","CenX","CenY","Mass",         
+              "Width","Depth","Ort0","Ort1","Ort2" ,"Ort3" ,"Ort4",
+              "Ort5","Ort6", "Ort7", "Ort8", "Ort9",
+              "Leaf.weight" , "Leaf.Area" ,"Leaf.Hue","Class")
+
+
+#PART-A
+#1.1.i.
+
+#centrality measures
+summary(da)
+
+
+#dispersion measurements;
+sapply(da,class)#ID and class not numeric
+
+summarise_all(da[,2:19],sd,na.rm= TRUE)
+summarise_all(da[,2:19],IQR,na.rm=TRUE)
+
+#missing value each attributes
+sapply(da, function(x) sum(is.na(x)))  
+
+
+#1.1.ii.
+#write a function display easily 
+plotAtt= function(df, attb){
+  
+  hist(df[,attb], breaks = 10,col="gray",
+       main=paste("Histogram of", attb), xlab=attb)
+  abline(v=mean(df[,attb],na.rm= TRUE),col="yellow", lwd=3)
+  abline(v=median(df[,attb],na.rm= TRUE),col="red", lwd=3)
+  legend("topright",c("Mean","Median"),col=c("yellow","red"), pch=16)
+
+}
+
+par(mfrow=c(3,3))
+#display first 9
+for(i in 2:10){
+  plotAtt(da,names(da)[i])
+}
+
+#display last 9
+for(i in 11:19){
+  plotAtt(da,names(da)[i])
+}
+
+
+#measure shape;the package e1071
+shape = function(df=da){
+  sha =" "
+  for(i in 2:19){
+    s = skewness(df[,i],na.rm=TRUE)
+    if(s> -0.3&& s<0.3){sha = "fairly symmertrical"}
+    else if (s<0.3){sha="negatively/left shewed"}
+    else if (s>0.3){sha="positively/right skewed"}
+    print(paste(names(df)[i],": ",sha,": ",round(s,4)))
+    
+  }
+}
+
+kur =function(df=da){
+  ku =" "
+  for(i in 2:19){
+    k = kurtosis(df[,i],na.rm=TRUE)
+    if(k<2.8){ku = "Leptokurtic"}
+    else if (k<3.2&&k>2.8){ku="relative Gaussian"}
+    else if (k>3.2){ku="Platikurtic"}
+    print(paste(names(df)[i],": ",ku,": ",round(k,4)))
+  }
+}
+shape()
+kur()
+
+
+#1.2.i
+
+#CORRELATION COEFFICIENT
+co1=cor(da$Ort4,da$Ort7,use="complete.obs")#"complete.obs" ignore NA
+#0.593 medium Positive Correlation
+
+#scatterplots
+par(mfrow=c(1,1))
+ggplot(da) + geom_point(aes(x= Ort4, y = Ort7),na.rm=TRUE)+
+   ggtitle(paste("orientation 4 vs orientation 7 - cor:",round(co1,4)))
+
+
+#1.2.ii
+#Scatterplots
+ggplot(da) + geom_point(aes(x= Class, y = Ort4),na.rm=TRUE)+
+  ggtitle("class vs orientation 4")
+
+ggplot(da) + geom_point(aes(x= Class, y = Ort6),na.rm=TRUE)+
+  ggtitle("class vs orientation 6")
+
+ggplot(da) + geom_point(aes(x= Class, y = Leaf.Area),na.rm=TRUE)+
+  ggtitle("class vs Area")
+
+ 
+
+#1.2.iii
+
+boxp = function(df, attb,groupAttb =da$Class){
+
+    fi = ggplot(df) +
+    geom_boxplot(aes(x=groupAttb, y=df[,attb]),na.rm=TRUE) + 
+    ggtitle(paste("Boxplot of ", attb))
+    
+    return(fi)
+  
+}
+
+
+plot_grid(boxp(da,names(da)[2]),boxp(da,names(da)[3]),boxp(da,names(da)[4]),boxp(da,names(da)[5]),
+          boxp(da,names(da)[6]),boxp(da,names(da)[7]),boxp(da,names(da)[8]),boxp(da,names(da)[9]),boxp(da,names(da)[10]))
+
+plot_grid(boxp(da,names(da)[11]),boxp(da,names(da)[12]),boxp(da,names(da)[13]),boxp(da,names(da)[14]),
+          boxp(da,names(da)[15]),boxp(da,names(da)[16]),boxp(da,names(da)[17]),boxp(da,names(da)[18]),boxp(da,names(da)[19]))
+
+
+#1.4.i
+
+#the missing value of dataset repleced by 0
+r_zero = function(df){
+  for (i in 2:(length(df)-1)){
+    
+    df [is.na(df[,names(df)[i]]),names(df)[i]] = 0
+    
+  }
+  
+  return(df)
+}
+zero_da = r_zero(da)
+
+
+#the missing value of dataset repleced by median
+r_med = function(df){
+  
+  for (i in 2:(length(df)-1)){
+    
+    m_att = median(df[,names(df)[i]], na.rm = TRUE)
+    #print(paste(names(med_da)[i],m_att))
+    df[is.na(df[,names(df)[i]]),names(df)[i]] = m_att
+  }
+  return(df)
+}
+
+med_da = r_med(da)
+
+
+#the missing value of dataset repleced by mean
+r_mean= function(df){
+  
+  for (i in 2:(length(df)-1)){
+    
+    m_att2 = mean(df[,names(df)[i]], na.rm = TRUE)
+    #print(paste(names(mean_da)[i],m_att2))
+    df[is.na(df[,names(df)[i]]),names(df)[i]] = m_att2
+  }
+  return (df)
+
+}
+mean_da = r_mean(da)
+
+#check
+sapply(zero_da, function(x) sum(is.na(x)))  
+sapply(med_da, function(x) sum(is.na(x)))
+sapply(mean_da, function(x) sum(is.na(x)))  
+
+#centrality measures
+summary(mean_da)
+summary(zero_da)
+summary(med_da)
+
+#dispersion measurements;
+summarise_all(mean_da[,2:19],sd)
+summarise_all(zero_da[,2:19],sd)
+summarise_all(med_da[,2:19],sd)
+
+#compare the effect on high missing rate attributes
+med_plpt=ggplot(med_da) + geom_point(aes(x= Ort7, y = Ort4))+
+  ggtitle("ort 7 vs ort 4- Replacing Medium")
+zero_plot=ggplot(zero_da) + geom_point(aes(x= Ort7, y = Ort4))+
+  ggtitle("ort 7 vs ort 4 - Replacing zero ")
+mean_plot=ggplot(mean_da) + geom_point(aes(x= Ort7, y = Ort4))+
+  ggtitle("ort 7 vs ot 4 - Replacing Mean")
+
+plot_grid(med_plpt,zero_plot,mean_plot)
+
+
+
+#1.5.
+
+#Mean centering
+meanCen = function(df) {
+  df= select_if(df, is.numeric)
+  return(apply(df, 2, function(y) y - mean(y)))
+}
+
+# execute each dataset
+mc_med = meanCen(med_da)
+mc_mean=meanCen(mean_da)
+mc_zero = meanCen(zero_da)
+
+#check
+summary(mc_med)
+summary(mc_mean)
+summary(mc_zero)
+
+
+#standardisation
+
+stand = function(df){
+  
+  df = select(df,-c(Sample_ID,Class))#ID and Class not nessary
+  df= select_if(df, is.numeric)
+  st_df = scale(df)
+  return(st_df)
+  
+}
+#execute each dataset
+#standard dataset
+st_med = stand(med_da)
+st_mean=stand(mean_da)
+st_zero = stand(zero_da)
+#check
+apply(st_med,2,sd)
+apply(st_mean,2,sd)
+apply(st_zero,2,sd)
+
+summary(st_med)
+summary(st_mean)
+summary(st_zero)
+
+
+#normalisation
+nor = function(df){
+  for(j in 2: length(df)-1){
+    
+    for (i in 1:nrow(df)){
+      minAtt = min(df[,names(df)[j]])
+      maxAtt = max(df[,names(df)[j]])
+      rate = maxAtt - minAtt
+      
+      df[i,names(df)[j]]=(df[i,names(df)[j]]-minAtt)/rate
+    }
+  }
+  return(df)
+  
+}
+#normal datset
+nor_med = nor(med_da)
+nor_mean=nor(mean_da)
+nor_zero = nor(zero_da)
+
+#check
+summary(nor_med)
+summary(nor_mean)
+summary(nor_zero)
+
+
+
+#1.6.i 
+
+sum(duplicated(da))#Check for duplicate instances
+
+sapply(da, function(x) 100*sum(is.na(x)/length(x)))  
+#attribute Leaf.weight miss ration too high 49.58%
+
+#(1)delete all instance inculde missing value
+
+
+delet_da  = select(da, -Leaf.weight)
+head(delet_da)
+delet_da = na.omit(delet_da)
+nrow(delet_da)#724-136 = 588
+head(delet_da)
+#write.csv(delet_da,"deleteInstance.csv")
+
+#this dataset use as pre-processed dataset for next section
+#(2)Option delete high missing rate instance 
+instance_na = function(df,miss_r){
+  count = 0
+  for(i in 1:nrow(da)){
+    
+    instance_na = sum(is.na(da[i,]))
+    miss_rate = 100*instance_na /length(df)
+    if(miss_rate>miss_r){
+      count = count+1
+      print(paste("The instance ",i," missing ",instance_na,"value with ",
+                  miss_rate,"missing rate over ",
+                  miss_r," Rate"))
+      }  }
+  return(count)
+}
+
+instance_na(da,30)
+#the instance 4 , 38 ,240 missing value over 30
+#The dataset by delet missing rate over 30 of attribute and instance
+prep_da = select(med_da, -Leaf.weight)# med_da replacing the missing value left
+prep_da = prep_da[-c(4,38,240),] 
+nrow(prep_da)# 724 - 3 = 721
+head(prep_da) #as the pre-pocesed data
+
+
+
+#ii. delete high correlation & no missing dataset
+
+corr = function(df,HighCo){
+  count = 0
+  for (i in 2:(length(df)-1)){
+    for (j in 2:(length(df)-1)){
+      
+      if (j>i){
+        co =cor(df[,names(df)[j]],df[,names(df)[i]],use="complete.obs")
+        if(co > HighCo || co< -HighCo){#check the correlation attributes
+        #if(co < HighCo && co> -HighCo){#check the uncorrelation attriubtes
+          count = count +1
+          print(paste("High correlations: ",names(df)[i]," with ",names(df)[j],": ",co))}
+      }  }
+  }
+  return(count)
+}
+
+#153 pair totall
+corr(da,0.5)
+#med replacing missing and delete all correlation
+del_da2 = select(med_da,-Ort0, -Ort1,-Ort3,-Ort4,-Ort5,-Ort7,-Ort8,-Ort9,-Depth)
+#test
+corr(del_da2,0.5)
+
+
+
+#iii. PCA
+#processing dataset accoding to previous  
+head(prep_da)
+#standardise
+pre_da.stand = as.data.frame(scale(prep_da[,2:(length(prep_da)-1)]))# ID,CLASS not nessary
+sapply(pre_da.stand,sd)#check
+
+#apply pca
+pca_da = prcomp(pre_da.stand, scale=TRUE)
+
+# analysis PCA
+summary(pca_da)
+
+#decide how many principal components should be retained.
+screeplot(pca_da, type="lines",col=3, main="Variance explained by PC")
+title(xlab="Principal Components")
+
+#obtain dataset with 8PC; dimensionality reduction
+pca_pc = as.data.frame(pca_da$x)
+pca_8pc =as.data.frame(pca_da$x[,1:8])#95.201%
+
+
+#Part 2: CLUSTERING
+
+#2.1
+#i
+
+clu_da = prep_da#the dataset delete leaf.weight &instance 4,38,240 &replacing by medium
+head(clu_da)#raw data before pca for accriding to class
+head(pca_8pc)#8PC dataset for cluster
+
+#Hierarchical Clustering
+hc = hclust(dist(pca_8pc))#applies hierarchical clustering
+plot(hc)
+HC5_cluster = cutree(hc,5)#5 cluster
+
+hc_t=table(clu_da$Class,HC5_cluster)#clu$class
+
+#K-means clusering
+km5 = kmeans(pca_8pc,5,iter.max=1000)
+KM5_cluster = km5$cluster
+
+km_t = table(clu_da$Class,KM5_cluster) #shows clusters class label according to clusters
+
+# PAM clustering:
+pam5 = pam(pca_8pc, 5)
+#Similarly to k-means, PAM also returns several values:
+PAM5_cluster = pam5$clustering #Saves clustering result
+
+pam_t=table(clu_da$Class,PAM5_cluster)
+#pairs(clu_da[,2:16],col=clu_da$PAM5)
+
+
+#Compare Result
+
+#Internal Metrics 
+head(pca_8pc)
+distance = dist(pca_8pc)
+
+statisticsHC5 = cluster.stats(distance, HC5_cluster)
+statisticsKM5 = cluster.stats(distance, KM5_cluster)
+statisticsPAM5= cluster.stats(distance, PAM5_cluster)
+
+#diameter: maximum within-cluster distances.
+#Larger the diameter, the worst the clustering
+statisticsHC5$diameter
+statisticsKM5$diameter#7.233703 6.629407 6.316150 8.702288 6.968279
+statisticsPAM5$diameter
+mean(statisticsHC5$diameter)#5.672432
+mean(statisticsKM5$diameter)#7.169965
+mean(statisticsPAM5$diameter)#6.26406
+
+#average: within cluster average median distances
+#Larger the average or median, the worst the clustering
+statisticsHC5$average.distance
+statisticsKM5$average.distance#3.692649 3.033011 3.333646 3.785173 3.609461
+statisticsPAM5$average.distance
+mean(statisticsHC5$median.distance)
+mean(statisticsKM5$median.distance)#4.065512 2.645860 3.473019 3.844134 6.125591
+mean(statisticsPAM5$median.distance)
+
+statisticsHC5$dunn
+statisticsKM5$dunn
+statisticsPAM5$dunn
+
+# Exteral Metrics 
+RindI = function (CM){
+  permu = permn(seq(1:ncol(CM)))
+  max_acc = sum(diag(CM))/sum(CM)
+  max_t = CM
+  for (a in 2:length(permu)){
+    # calculate accuracy
+    p = unlist(permu[a])
+    t= CM[,c(p)]
+    acc = sum(diag(t))/sum(CM) # Rand Index
+    # replce the acc over max acc
+    if (acc> max_acc){
+      max_t = t
+      max_acc = acc
+    }
+  }
+  return(list(max_t, max_acc))
+}
+
+#AUTO rind Index
+RindI(hc_t)#HC35.22885%
+RindI(km_t)#kmean40.7767%
+RindI(pam_t)#PAM 35.64494%
+
+#purity
+sum(apply(hc_t, 1 , max))/sum(hc_t)#HC:0.4854369
+sum(apply(km_t, 1 , max))/sum(km_t)#K-MEAN:0.4868239
+sum(apply(pam_t, 1 , max))/sum(pam_t)#PAM:0.4341193
+
+#Manual Rind Index
+
+# #HC RI
+# # sum(diag(hc_t))#TPs:155
+# # sum(diag(hc_t)/nrow(clu_da))#RI 21.49%
+# hc_ali = cbind(hc_t[,3],hc_t[,5],hc_t[,1],hc_t[,2],hc_t[,4])# manual aligned max
+# sum(diag(hc_ali))#254
+# sum(diag(hc_ali)/nrow(clu_da))#RI 35.22%
+# 
+#K-mean RI
+# km_t
+# sum(diag(km_t))#
+# sum(diag(km_t)/nrow(clu_da))#
+# km_ali = cbind(km_t[,3],km_t[,5],km_t[,2],km_t[,4],km_t[,1])# manual
+# sum(diag(km_ali))#294
+# sum(diag(km_ali)/nrow(clu_da))#RI
+
+#PAM RI
+# sum(diag(pam_t))#
+# sum(diag(pam_t)/nrow(clu_da))#
+# pam_ali = cbind(pam_t[,1],pam_t[,2],pam_t[,3],pam_t[,5],pam_t[,4])#aligned
+# pam_ali
+# sum(diag(pam_ali))#257
+# sum(diag(pam_ali)/nrow(clu_da))#manual RI
+
+
+#2.2
+
+
+#K-means clusering
+
+#find the best k
+find_K <- (nrow(pca_8pc)-1)*sum(apply(pca_8pc,2,var))
+for (i in 1:8) find_K[i] <- sum(kmeans(pca_8pc,centers=i)$withinss)
+plot(1:8, find_K, type="b", 
+     xlab="Number of Clusters",ylab="Within groups sum of squares",main="Find the best k")
+
+
+km5 = kmeans(pca_8pc,6,iter.max=1000,nstart = 250,algorithm="MacQueen")
+KM5_cluster = km5$cluster
+
+km_t = table(clu_da$Class,KM5_cluster)
+
+
+RindI(km_t)#kmean37.72538%
+
+statisticsKM5 = cluster.stats(distance, KM5_cluster)
+statisticsKM5$diameter
+mean(statisticsKM5$diameter)#6.532173
+
+
+
+#Hierarchical Clustering
+hc = hclust(dist(pca_8pc),method = "ward.D2")#applies hierarchical clustering
+plot(hc)
+HC5_cluster = cutree(hc,6)#6 cluster
+
+hc_t=table(clu_da$Class,HC5_cluster)#clu$class
+
+
+RindI(hc_t)#HC5:35.22885% 6:37.86408% ward2 38.41
+statisticsHC5 = cluster.stats(distance, HC5_cluster)
+statisticsHC5$diameter
+mean(statisticsHC5$diameter)#5.672432
+
+
+
+# PAM clustering:
+pam5 = pam(pca_8pc, 6,metric="euclidean",stan=T)
+#Similarly to k-means, PAM also returns several values:
+PAM5_cluster = pam5$clustering #Saves clustering result
+
+pam_t=table(clu_da$Class,PAM5_cluster)
+#pairs(clu_da[,2:16],col=clu_da$PAM5)
+
+
+RindI(pam_t)#PAM 35.64494% 6:38.28017%
+
+statisticsPAM5= cluster.stats(distance, PAM5_cluster)
+
+statisticsPAM5$diameter
+mean(statisticsPAM5$diameter)#6.26406
+
+
+
+
+
+#2.3
+
+#i
+head(pca_pc[,1:10]) #after PCA data
+pca10 =as.data.frame(pca_da$x[,1:10]) #10PC
+
+#ii
+#head(del_da)# delet high missing rate;weight attributes &intsatnce 4,38,240
+head(delet_da)#delet high missing rate attributs&all instance which include missing value lefte
+#iii
+head(med_da)#replace by medium
+head(mean_da)#replace by mean
+head(zero_da)#replace by zero
+
+
+#k-mean
+
+pca_k= kmeans(pca10,5,iter.max=1000) #i
+
+del_k = kmeans(delet_da[,2:18],5, iter.max = 1000)#ii
+
+zero_k = kmeans(zero_da[,2:19], 5, iter.max = 1000)#iii
+mean_k = kmeans(mean_da[,2:19], 5, iter.max = 1000)
+med_k = kmeans(med_da[,2:19], 5, iter.max = 1000)
+
+pca_k=pca_k$cluster#i
+del_k=del_k$cluster#ii
+results = data.frame(zero_k=zero_k$cluster,mean_k=mean_k$cluster,med_k=med_k$cluster)#iii
+
+pca_t = table(prep_da$Class,pca_k)
+pca_t#i
+
+del_t =table(delet_da$Class,del_k)
+del_t#ii
+
+zero_t =table(zero_da$Class,results$zero_k)
+zero_t#iii
+mean_t =table(mean_da$Class,results$mean_k)
+mean_t
+med_t =table(med_da$Class,results$med_k)
+med_t
+
+#Compare resultes
+
+# Internal Metrics 
+distance1 = dist(pca10)
+distance2 = dist(delet_da[,2:18])
+distance3 = dist(zero_da[,2:19])
+distance4 = dist(mean_da[,2:19])
+distance5 = dist(med_da[,2:19])
+
+statistics1 = cluster.stats(distance1, pca_k)
+statistics2 = cluster.stats(distance2, del_k)
+statistics3= cluster.stats(distance3, results$zero_k)
+statistics4= cluster.stats(distance4, results$mean_k)
+statistics5= cluster.stats(distance5, results$med_k)
+mean(statistics1$diameter)#7.561933
+mean(statistics2$diameter)#1321.415
+mean(statistics3$diameter)#1505.135
+mean(statistics4$diameter)#1326.953
+mean(statistics5$diameter)#1329.278
+
+statistics1$dunn
+statistics2$dunn
+statistics3$dunn
+statistics4$dunn
+statistics5$dunn
+
+
+# Exteral Metrics 
+RindI(pca_t)#i 38.55756%
+RindI(del_t)#ii 35.37415%
+RindI(zero_t)#iii 35.08287%
+RindI(mean_t)#36.60221%
+RindI(med_t)#37.56906%
+
+
+#purity
+sum(apply(pca_t, 1 , max))/sum(pca_t)#I.     41.119279%
+sum(apply(del_t, 1 , max))/sum(del_t)#II.:   43.70748%
+sum(apply(zero_t, 1 , max))/sum(zero_t)#III.:54.83425%
+sum(apply(mean_t, 1 , max))/sum(mean_t)#     44.8895%
+sum(apply(med_t, 1 , max))/sum(med_t)#       45.99448%
+
+
+
+
+
+
+#3.1
+
+
+write.csv(pca_8pc, "pca8_da.csv")
+
+write.csv(prep_da, "prep_da.csv")
+
+write.csv(pca10, "pca10_da.csv")
+
+
+write.csv(delet_da, "del_da.csv")
+
+write.csv(med_da, "med_da.csv")
+
+write.csv(zero_da, "zero_da.csv")
+
+write.csv(mean_da, "mean_da.csv")
+
+
+
+
+# 4.i#remove the outliers; ref additional reading
+# cap_outliers = function (df){
+#   fields = names(df)
+#   for (field in fields){
+#     qnt = quantile(df[,field], probs=c(.25, .75), na.rm = T)
+#     limits = quantile(df[,field], probs=c(.05, .95), na.rm = T)
+#     H = 1.5 * IQR(df[,field], na.rm = T)
+#     df[df[,field] < (qnt[1] - H), field] =limits[1]
+#     df[df[,field] > (qnt[2] + H),field] = limits[2]
+#   }
+#   return(df)
+#   
+# }
+# 
+# library(outliers)
+# 
+# outlier(med_da[,2:19])
+# 
+# x=select(med_da,-Sample_ID,-Class)
+# head(x)
+# #Now, let's replace those furtherst way with the median of the distribution
+# x = rm.outlier(x, fill = TRUE, median = TRUE, opposite = FALSE)
+# head(x)
+# 
+# med_da_no_out= cap_outliers(x)
+
+
+
+
+
+# 6.iii #analysis PC1 vsPC2
+# screeplot(pca_da, type="lines",col=3, main="Variance explained by PC")
+# title(xlab="Principal Components")
+# 
+# # create data frame with scores
+# scores = as.data.frame(pca_da$x)    
+# ggplot(scores) + geom_point(aes(x= PC1, y = PC2))+
+#   ggtitle("PC1 vs PC2")
+# 
+# #PC1:
+# pca_da$rotation[,1]
+# #PC2:
+# pca_da$rotation[,2]
+# #bipplot PC1 PC2
+# par(mfrow=c(1,1))
+# biplot(pca_da,cex=0.8)
+# abline(h = 0, v = 0, lty = 2, col = 8)
+
+
+
+
+
